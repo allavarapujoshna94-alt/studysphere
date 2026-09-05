@@ -173,7 +173,23 @@ export default function Home() {
         <div className="container text-center text-white">
           <h2 className="fw-bold mb-2">Community Driven Learning</h2>
           <p className="mb-4">Every note, rating, and discussion is created by our amazing community.</p>
-          <Link to="/register" className="btn btn-light btn-lg fw-semibold">Join Community</Link>
+          {isLoggedIn ? (
+  <Link
+    to="/notes"
+    className="btn btn-light btn-lg fw-semibold"
+  >
+    <i className="fa-solid fa-book-open me-2"></i>
+    Explore Notes
+  </Link>
+) : (
+  <Link
+    to="/register"
+    className="btn btn-light btn-lg fw-semibold"
+  >
+    <i className="fa-solid fa-user-plus me-2"></i>
+    Join Community
+  </Link>
+)}
         </div>
       </section>
     </>
