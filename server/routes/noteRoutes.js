@@ -137,7 +137,15 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/notes
 router.post('/', requireAuth, (req, res) => {
+  console.log('=== UPLOAD START ===');
+  console.log('Origin:', req.headers.origin);
+  console.log('Content-Type:', req.headers['content-type']);
+
   upload.single('file')(req, res, async (uploadErr) => {
+    console.log('UPLOAD ERROR:', uploadErr);
+    console.log('REQ FILE:', req.file);
+    console.log('REQ BODY:', req.body);
+
     if (handleUploadError(uploadErr, res)) return;
     try {
       const { title, category, description, fileType } = req.body;
@@ -156,6 +164,7 @@ router.post('/', requireAuth, (req, res) => {
         fileType: fileType || path.extname(req.file.originalname).replace('.', '').toUpperCase(),
         author: req.user.name,
         uploadedBy: req.user.id,
+        
         file: {
           originalName: req.file.originalname,
           filename: req.file.filename,
