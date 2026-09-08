@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="container">
         <div className="row g-4">
           <div className="col-lg-4">
-            <div className="brand mb-2">ShareMyNotes</div>
+            <div className="brand mb-2">StudySphere</div>
             <p>Empowering students and educators to share knowledge through our digital notes sharing platform.</p>
           </div>
           <div className="col-6 col-lg-2">
@@ -32,7 +32,7 @@ export default function Footer() {
           </div>
         </div>
         <hr className="border-secondary mt-4" />
-        <p className="text-center mb-0 small">&copy; {year} ShareMyNotes Clone. Built for educational purposes.</p>
+        <p className="text-center mb-0 small">&copy; {year} Studysphere Clone. Built for educational purposes.</p>
       </div>
     </footer>
   );
