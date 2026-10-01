@@ -102,24 +102,61 @@ router.get('/mine', requireAuth, async (req, res) => {
 });
 
 // GET /api/notes/:id/file
+// GET /api/notes/:id/file
 router.get('/:id/file', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid note ID.' });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid note ID.' });
+    }
+
     const note = await Note.findById(req.params.id);
-    if (!note) return res.status(404).json({ message: 'Note not found.' });
-    if (!note.file?.filename) return res.status(404).json({ message: 'This note has no file attached.' });
+
+    if (!note) {
+      return res.status(404).json({ message: 'Note not found.' });
+    }
+
+    if (!note.file?.filename) {
+      return res.status(404).json({
+        message: 'This note has no file attached.',
+      });
+    }
 
     const filePath = path.join(uploadDir, note.file.filename);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'Attached file is no longer available.' });
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        message: 'Attached file is no longer available.',
+      });
+    }
+
+    const isDownload = req.query.download === '1';
+
+    const disposition = isDownload ? 'attachment' : 'inline';
+
+    res.setHeader(
+      'Content-Disposition',
+      `${disposition}; filename="${encodeURIComponent(
+        note.file.originalName || note.file.filename
+      )}"`
+    );
+
+    res.setHeader(
+      'Content-Type',
+      note.file.mimetype || 'application/octet-stream'
+    );
 
     res.setHeader('Cache-Control', 'no-store');
-    res.download(filePath, note.file.originalName || note.file.filename, (downloadErr) => {
-      if (downloadErr && !res.headersSent) {
-        res.status(500).json({ message: 'Failed to send the file.', error: downloadErr.message });
-      }
-    });
+
+    res.sendFile(filePath);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to download file.', error: err.message });
+    console.error('FILE SERVE ERROR:', err);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        message: 'Failed to open the file.',
+        error: err.message,
+      });
+    }
   }
 });
 

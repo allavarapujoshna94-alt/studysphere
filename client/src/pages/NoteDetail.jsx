@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../AppContext.jsx';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -7,6 +7,8 @@ import {
   getFileUrl,
   downloadFile
 } from '../api.js';
+
+import { renderAsync } from 'docx-preview';
 
 export default function NoteDetail() {
   const { id } = useParams();
@@ -17,6 +19,9 @@ export default function NoteDetail() {
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [docxLoading, setDocxLoading] = useState(false);
+
+  const docxContainerRef = useRef(null);
 
   useEffect(() => {
     setLoading(true);
@@ -41,6 +46,7 @@ export default function NoteDetail() {
       <div className="container py-5">
         <div className="empty-state">
           <i className="fa-regular fa-face-frown"></i>
+
           <p>{error || 'Note not found.'}</p>
 
           <Link
@@ -54,7 +60,9 @@ export default function NoteDetail() {
     );
   }
 
-  const cat = CATEGORIES.find((c) => c.id === note.category);
+  const cat = CATEGORIES.find(
+    (c) => c.id === note.category
+  );
 
   const fileName =
     note.file?.originalName ||
@@ -80,15 +88,17 @@ export default function NoteDetail() {
     'gif'
   ].includes(extension);
 
-  const isOfficeFile = [
-    'doc',
-    'docx',
-    'ppt',
-    'pptx'
-  ].includes(extension);
+  const isDocx =
+    extension === 'docx';
+
+  const isPpt =
+    extension === 'ppt' ||
+    extension === 'pptx';
 
   async function handleDownload() {
-    if (!note.file?.filename || downloading) return;
+    if (!note.file?.filename || downloading) {
+      return;
+    }
 
     setDownloading(true);
 
@@ -101,7 +111,8 @@ export default function NoteDetail() {
       showToast('Download started.');
     } catch (e) {
       showToast(
-        e.message || 'Unable to download the file.',
+        e.message ||
+          'Unable to download the file.',
         'error'
       );
     } finally {
@@ -109,7 +120,7 @@ export default function NoteDetail() {
     }
   }
 
-  function handleView() {
+  async function handleView() {
     if (!note.file?.filename) {
       showToast(
         'No file is attached to this note.',
@@ -119,10 +130,93 @@ export default function NoteDetail() {
     }
 
     setShowPreview(true);
+
+    /*
+      DOCX files need special browser rendering.
+    */
+    if (isDocx) {
+      setDocxLoading(true);
+
+      try {
+        const response = await fetch(fileUrl);
+
+        if (!response.ok) {
+          throw new Error(
+            'Unable to load the DOCX file.'
+          );
+        }
+
+        const blob = await response.blob();
+
+        /*
+          Wait for the preview container
+          to appear in the DOM.
+        */
+        setTimeout(async () => {
+          if (!docxContainerRef.current) {
+            setDocxLoading(false);
+            return;
+          }
+
+          try {
+            docxContainerRef.current.innerHTML = '';
+
+            await renderAsync(
+              blob,
+              docxContainerRef.current,
+              null,
+              {
+                className: 'docx-preview',
+                inWrapper: true,
+                ignoreWidth: false,
+                ignoreHeight: false,
+                breakPages: true,
+                renderHeaders: true,
+                renderFooters: true,
+                renderFootnotes: true,
+                useBase64URL: true
+              }
+            );
+
+            setDocxLoading(false);
+          } catch (error) {
+            console.error(
+              'DOCX PREVIEW ERROR:',
+              error
+            );
+
+            setDocxLoading(false);
+
+            showToast(
+              'Unable to preview this DOCX file.',
+              'error'
+            );
+          }
+        }, 100);
+      } catch (error) {
+        console.error(
+          'DOCX LOAD ERROR:',
+          error
+        );
+
+        setDocxLoading(false);
+
+        showToast(
+          error.message ||
+            'Unable to preview DOCX.',
+          'error'
+        );
+      }
+    }
   }
 
   function handleClosePreview() {
     setShowPreview(false);
+    setDocxLoading(false);
+
+    if (docxContainerRef.current) {
+      docxContainerRef.current.innerHTML = '';
+    }
   }
 
   return (
@@ -131,19 +225,26 @@ export default function NoteDetail() {
       {/* =========================
           BREADCRUMB
       ========================== */}
+
       <nav aria-label="breadcrumb">
         <ol className="breadcrumb">
+
           <li className="breadcrumb-item">
-            <Link to="/">Home</Link>
+            <Link to="/">
+              Home
+            </Link>
           </li>
 
           <li className="breadcrumb-item">
-            <Link to="/notes">Notes</Link>
+            <Link to="/notes">
+              Notes
+            </Link>
           </li>
 
           <li className="breadcrumb-item active">
             {note.title}
           </li>
+
         </ol>
       </nav>
 
@@ -153,35 +254,46 @@ export default function NoteDetail() {
         {/* =========================
             MAIN CONTENT
         ========================== */}
+
         <div className="col-lg-8">
 
           {/* Category */}
+
           <span className="badge-cat mb-3 d-inline-block">
-            {cat ? cat.name : note.category}
+            {cat
+              ? cat.name
+              : note.category}
           </span>
 
 
           {/* Title */}
+
           <h1 className="fw-bold">
             {note.title}
           </h1>
 
 
           {/* Note information */}
+
           <p className="text-muted">
 
             <i className="fa-regular fa-user me-1"></i>
+
             {note.author}
 
             &nbsp;•&nbsp;
 
             <i className="fa-regular fa-eye me-1"></i>
-            {(note.views || 0).toLocaleString()} views
+
+            {(note.views || 0).toLocaleString()}
+            {' '}views
 
             &nbsp;•&nbsp;
 
             <i className="fa-regular fa-file me-1"></i>
-            {note.fileType || extension.toUpperCase()}
+
+            {note.fileType ||
+              extension.toUpperCase()}
 
           </p>
 
@@ -191,6 +303,7 @@ export default function NoteDetail() {
           {/* =========================
               DESCRIPTION
           ========================== */}
+
           <h5 className="fw-bold">
             Description
           </h5>
@@ -201,10 +314,11 @@ export default function NoteDetail() {
 
 
           {/* =========================
-              FILE PREVIEW AREA
+              FILE CARD
           ========================== */}
 
           {!showPreview && (
+
             <div
               className="note-thumb rounded mt-4 d-flex flex-column align-items-center justify-content-center"
               style={{
@@ -213,28 +327,45 @@ export default function NoteDetail() {
                 border: '1px solid #e5e7eb'
               }}
             >
+
               <i
                 className={
                   isPdf
                     ? 'fa-solid fa-file-pdf fa-4x text-danger'
                     : isImage
                     ? 'fa-solid fa-image fa-4x text-primary'
-                    : isOfficeFile
+                    : isDocx
                     ? 'fa-solid fa-file-word fa-4x text-primary'
+                    : isPpt
+                    ? 'fa-solid fa-file-powerpoint fa-4x text-danger'
                     : 'fa-solid fa-file-lines fa-4x text-secondary'
                 }
               ></i>
+
 
               <p className="mt-3 mb-0 fw-semibold">
                 {fileName}
               </p>
 
+
               {note.file?.size && (
+
                 <small className="text-muted">
-                  {(note.file.size / 1024 / 1024).toFixed(2)} MB
+
+                  {(
+                    note.file.size /
+                    1024 /
+                    1024
+                  ).toFixed(2)}
+
+                  {' '}MB
+
                 </small>
+
               )}
+
             </div>
+
           )}
 
 
@@ -242,31 +373,45 @@ export default function NoteDetail() {
               PREVIEW
           ========================== */}
 
-          {showPreview && note.file?.filename && (
+          {showPreview &&
+            note.file?.filename && (
+
             <div className="mt-4">
 
-              {/* Preview header */}
+              {/* Preview Header */}
+
               <div className="d-flex justify-content-between align-items-center mb-3">
 
                 <h5 className="fw-bold mb-0">
+
                   <i className="fa-solid fa-eye me-2"></i>
+
                   Preview
+
                 </h5>
+
 
                 <button
                   type="button"
                   className="btn btn-outline-secondary btn-sm"
                   onClick={handleClosePreview}
                 >
+
                   <i className="fa-solid fa-xmark me-1"></i>
+
                   Close
+
                 </button>
 
               </div>
 
 
-              {/* PDF Preview */}
+              {/* =========================
+                  PDF PREVIEW
+              ========================== */}
+
               {isPdf && (
+
                 <div
                   style={{
                     width: '100%',
@@ -277,6 +422,7 @@ export default function NoteDetail() {
                     background: '#f8f9fa'
                   }}
                 >
+
                   <iframe
                     src={fileUrl}
                     title={fileName}
@@ -286,12 +432,18 @@ export default function NoteDetail() {
                       border: 'none'
                     }}
                   />
+
                 </div>
+
               )}
 
 
-              {/* Image Preview */}
+              {/* =========================
+                  IMAGE PREVIEW
+              ========================== */}
+
               {isImage && (
+
                 <div
                   className="text-center p-3"
                   style={{
@@ -300,6 +452,7 @@ export default function NoteDetail() {
                     background: '#f8f9fa'
                   }}
                 >
+
                   <img
                     src={fileUrl}
                     alt={fileName}
@@ -310,12 +463,62 @@ export default function NoteDetail() {
                       borderRadius: '8px'
                     }}
                   />
+
                 </div>
+
               )}
 
 
-              {/* Office File */}
-              {isOfficeFile && (
+              {/* =========================
+                  DOCX PREVIEW
+              ========================== */}
+
+              {isDocx && (
+
+                <div
+                  style={{
+                    border: '1px solid #ddd',
+                    borderRadius: '10px',
+                    background: '#f8f9fa',
+                    minHeight: '300px',
+                    maxHeight: '750px',
+                    overflowY: 'auto',
+                    padding: '20px'
+                  }}
+                >
+
+                  {docxLoading && (
+
+                    <div className="text-center py-5">
+
+                      <div
+                        className="spinner-border text-primary"
+                        role="status"
+                      ></div>
+
+                      <p className="text-muted mt-3 mb-0">
+                        Loading document preview...
+                      </p>
+
+                    </div>
+
+                  )}
+
+                  <div
+                    ref={docxContainerRef}
+                  ></div>
+
+                </div>
+
+              )}
+
+
+              {/* =========================
+                  PPT / PPTX
+              ========================== */}
+
+              {isPpt && (
+
                 <div
                   className="text-center p-5"
                   style={{
@@ -324,53 +527,73 @@ export default function NoteDetail() {
                     background: '#f8f9fa'
                   }}
                 >
+
                   <i
-                    className="fa-solid fa-file-lines fa-4x mb-3"
+                    className="fa-solid fa-file-powerpoint fa-4x text-danger mb-3"
                   ></i>
+
+
+                  <h5 className="fw-bold">
+                    PowerPoint Preview
+                  </h5>
+
+
+                  <p className="text-muted">
+                    PowerPoint files cannot be
+                    directly previewed by the
+                    browser.
+                  </p>
+
+
+                  <p className="text-muted small mb-0">
+                    You can download the file and
+                    open it using Microsoft
+                    PowerPoint.
+                  </p>
+
+                </div>
+
+              )}
+
+
+              {/* =========================
+                  OTHER FILE TYPES
+              ========================== */}
+
+              {!isPdf &&
+                !isImage &&
+                !isDocx &&
+                !isPpt && (
+
+                <div
+                  className="text-center p-5"
+                  style={{
+                    border: '1px solid #ddd',
+                    borderRadius: '10px',
+                    background: '#f8f9fa'
+                  }}
+                >
+
+                  <i className="fa-solid fa-file fa-4x mb-3"></i>
+
 
                   <h5 className="fw-bold">
                     Preview not available
                   </h5>
 
+
                   <p className="text-muted">
-                    Browser preview is not available for
-                    {` ${extension.toUpperCase()}`} files.
+                    This file type cannot be
+                    previewed directly in the
+                    browser.
                   </p>
 
-                  <p className="text-muted small">
-                    You can download the file and open it
-                    using Microsoft Word or PowerPoint.
-                  </p>
                 </div>
+
               )}
 
-
-              {/* Other file types */}
-              {!isPdf &&
-                !isImage &&
-                !isOfficeFile && (
-                  <div
-                    className="text-center p-5"
-                    style={{
-                      border: '1px solid #ddd',
-                      borderRadius: '10px',
-                      background: '#f8f9fa'
-                    }}
-                  >
-                    <i className="fa-solid fa-file fa-4x mb-3"></i>
-
-                    <h5 className="fw-bold">
-                      Preview not available
-                    </h5>
-
-                    <p className="text-muted">
-                      This file type cannot be previewed
-                      directly in the browser.
-                    </p>
-                  </div>
-                )}
-
             </div>
+
           )}
 
 
@@ -380,56 +603,80 @@ export default function NoteDetail() {
 
           <div className="d-flex flex-wrap gap-2 mt-4">
 
-            {/* View Button */}
+            {/* View */}
+
             {note.file?.filename ? (
+
               <button
                 type="button"
                 className="btn btn-gradient btn-lg"
                 onClick={handleView}
               >
+
                 <i className="fa-solid fa-eye me-2"></i>
-                {showPreview ? 'Previewing' : 'View Note'}
+
+                {showPreview
+                  ? 'Previewing'
+                  : 'View Note'}
+
               </button>
+
             ) : (
+
               <button
                 type="button"
                 className="btn btn-secondary btn-lg"
                 disabled
               >
+
                 <i className="fa-solid fa-ban me-2"></i>
+
                 File unavailable
+
               </button>
+
             )}
 
 
-            {/* Open in New Tab */}
+            {/* Open */}
+
             {note.file?.filename && (
+
               <a
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-outline-primary btn-lg"
               >
+
                 <i className="fa-solid fa-up-right-from-square me-2"></i>
+
                 Open
+
               </a>
+
             )}
 
 
-            {/* Download Button */}
+            {/* Download */}
+
             {note.file?.filename && (
+
               <button
                 type="button"
                 className="btn btn-outline-dark btn-lg"
                 onClick={handleDownload}
                 disabled={downloading}
               >
+
                 <i className="fa-solid fa-download me-2"></i>
 
                 {downloading
                   ? 'Downloading...'
                   : 'Download'}
+
               </button>
+
             )}
 
           </div>
@@ -451,13 +698,19 @@ export default function NoteDetail() {
 
 
             {/* Author */}
+
             <div className="d-flex align-items-center gap-2 mb-3">
 
               <div className="contributor-avatar">
+
                 {note.author
-                  ? note.author.charAt(0).toUpperCase()
+                  ? note.author
+                      .charAt(0)
+                      .toUpperCase()
                   : '?'}
+
               </div>
+
 
               <div className="fw-semibold">
                 {note.author}
@@ -467,22 +720,32 @@ export default function NoteDetail() {
 
 
             {/* Note information */}
+
             <h6 className="fw-bold mt-4">
               Note Info
             </h6>
 
+
             <ul className="list-unstyled small text-muted">
 
               <li className="mb-2">
+
                 <i className="fa-regular fa-file me-2"></i>
+
                 <strong>File:</strong>{' '}
-                {fileName || 'Not attached'}
+
+                {fileName ||
+                  'Not attached'}
+
               </li>
 
 
               <li className="mb-2">
+
                 <i className="fa-solid fa-hard-drive me-2"></i>
+
                 <strong>Size:</strong>{' '}
+
                 {note.file?.size
                   ? `${(
                       note.file.size /
@@ -490,22 +753,32 @@ export default function NoteDetail() {
                       1024
                     ).toFixed(2)} MB`
                   : '—'}
+
               </li>
 
 
               <li className="mb-2">
+
                 <i className="fa-regular fa-eye me-2"></i>
+
                 <strong>Views:</strong>{' '}
-                {(note.views || 0).toLocaleString()}
+
+                {(note.views || 0)
+                  .toLocaleString()}
+
               </li>
 
 
               <li>
+
                 <i className="fa-solid fa-file-code me-2"></i>
+
                 <strong>Type:</strong>{' '}
+
                 {extension
                   ? extension.toUpperCase()
                   : note.fileType || '—'}
+
               </li>
 
             </ul>
